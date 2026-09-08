@@ -1,0 +1,161 @@
+# Three.js 水面制作笔记
+
+## 依赖
+
+```json
+"dependencies": {
+  "three": "^0.170.0"
+}
+```
+
+导入：
+
+```js
+import { Water } from 'three/examples/jsm/objects/Water.js';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
+```
+
+---
+
+## 水面核心
+
+### 基础创建
+
+```js
+const geometry = new THREE.PlaneGeometry(120, 120);
+const water = new Water(geometry, {
+  textureWidth: 512,
+  textureHeight: 512,
+  waterNormals: normalMapTexture,
+  sunDirection: sunPos.clone().normalize(),
+  sunColor: 0xffffff,
+  waterColor: 0x3D6D9B,
+  distortionScale: 3.7,
+  side: THREE.DoubleSide,
+  fog: true,           // 配合场景 fog，远距离自然淡出
+});
+water.rotation.x = -Math.PI / 2;  // 铺平为水面
+```
+
+### 关键 uniform 调整
+
+```js
+// 波尺度（波长），默认 1.0，调大到 4.0 产生开阔水面的大浪效果
+water.material.uniforms.size.value = 4.0;
+
+// 时间驱动波动（在动画循环中更新）
+water.material.uniforms.time.value += dt * 0.5;
+```
+
+### 法线贴图（最重要）
+
+**推荐方案**（CDN 加载高质量贴图）：
+
+```js
+const texture = new THREE.TextureLoader().load(
+  'https://threejs.org/examples/textures/waternormals.jpg'
+);
+texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+texture.repeat.set(4, 4);
+```
+
+要点：
+- 务必设置 `RepeatWrapping`，否则法线只覆盖一个周期
+- `repeat` 控制波纹密度（4 表示在平面上重复 4×4 次）
+- 可以用 `TextureLoader` 返回的纹理直接传给 `Water`，Three.js 内部自动处理异步加载
+
+**备选方案**（离线/无网络时用 Canvas 程序化生成）：
+
+用多层正弦波叠加生成高度场 → 差分计算法线 → 写入 Canvas → `CanvasTexture`。效果不如照片贴图真实，但可脱离外部依赖。
+
+### 水色策略
+
+**不要只用纯色**。水的视觉呈现 ≈ **基底色 + 环境反射**：
+
+- `waterColor` 设定深色基底（参考值 `#001e0f` 极暗青绿）
+- Surface 反射的天空/周围环境提供蓝色调
+- 最终看到的水色是这两者的混合
+
+如果要求特定的水色（如 `#3D6D9B`），可以直接设为 `waterColor`，再通过天空和光照微调。
+
+---
+
+## 天空（水面反射的来源）
+
+水面好看的诀窍：**水面反射的质量取决于场景里有什么可反射**。
+
+```js
+const sky = new Sky();
+sky.scale.setScalar(10000);
+scene.add(sky);
+
+const uniforms = sky.material.uniforms;
+uniforms.turbidity.value = 10;        // 浊度
+uniforms.rayleigh.value = 2;          // 瑞利散射
+uniforms.mieCoefficient.value = 0.005;
+uniforms.mieDirectionalG.value = 0.8;
+
+// 太阳位置（同时传给 Water 和 DirectionalLight）
+const sunPos = new THREE.Vector3();
+const phi = THREE.MathUtils.degToRad(90 - 18);   // 18° 仰角
+const theta = THREE.MathUtils.degToRad(210);      // 方位角
+sunPos.setFromSphericalCoords(1, phi, theta);
+uniforms.sunPosition.value.copy(sunPos);
+```
+
+---
+
+## 光照
+
+```js
+// 环境光 — 补暗部
+const ambient = new THREE.AmbientLight(0x445566, 0.4);
+
+// 半球光 — 天/地渐变
+const hemi = new THREE.HemisphereLight(0x87ceeb, 0x224433, 0.6);
+
+// 方向光（太阳）— 位置与 Sky 的 sunPosition 一致
+const sun = new THREE.DirectionalLight(0xffeedd, 1.5);
+sun.position.copy(sunPos).multiplyScalar(100);
+```
+
+---
+
+## 雾
+
+```js
+// 指数雾比线性雾更适合开阔水面
+scene.fog = new THREE.FogExp2(0x89b3d9, 0.0008);
+```
+- 雾色匹配天空颜色，地平线融入背景
+- Water 构造参数 `fog: true` 让水面受雾影响
+
+---
+
+## ToneMapping
+
+```js
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;   // 水面场景建议 0.5~0.8
+```
+
+曝光越低画面越深沉，过高会泛白、水体显得轻浮。
+
+---
+
+## 经验总结
+
+| 要点 | 说明 |
+|---|---|
+| 法线贴图 > 程序化 | 真实照片贴图的微细节是正弦波叠加远远比不上的 |
+| 必须有环境反射 | 水面好不好看 70% 取决于反射了什么，不是水面本身颜色 |
+| 太阳位置统一 | Sky / DirectionalLight / Water.sunDirection 三者保持一致 |
+| `size` 参数别忽略 | 默认 1.0 波纹太碎，开阔水面开到 3.0~5.0 |
+| 曝光往低调 | 水面场景高曝光会失去水体应有的深沉感 |
+| 雾是画龙点睛 | 指数雾 + Water.fog 让水面在地平线处自然消失 |
+
+---
+
+## 参考实现
+
+- Three.js 官方示例：`examples/webgl_lights_hemisphere.html`
