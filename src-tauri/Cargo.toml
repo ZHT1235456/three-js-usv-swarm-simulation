@@ -1,0 +1,27 @@
+[package]
+name = "usv-swarm-sim"
+version = "1.0.0"
+description = "无人艇集群仿真平台"
+authors = ["USV Swarm Simulation"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "usv_swarm_sim_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "z"
+panic = "abort"
+strip = true
