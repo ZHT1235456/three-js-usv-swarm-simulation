@@ -1,5 +1,7 @@
 # 无人艇集群仿真平台
 
+> **新接手的开发者请先阅读 [新手交接指南（HANDOVER.md）](HANDOVER.md)**：包含环境搭建、代码地图、算法接口，以及面向轻量化运行的 JavaScript / TypeScript 神经网络接入方案。当前项目尚未接入神经网络。
+
 项目标识：`three-js-usv-swarm-simulation`。
 
 Three.js + Vite 本地交互仿真原型。运行 `npm install`，再运行 `npm run dev`，访问终端给出的地址。`npm run build` 生成 dist；`npm test` 检查航路、艇间避碰、控制任务完成与定位数据。
